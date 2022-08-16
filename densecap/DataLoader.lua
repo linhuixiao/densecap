@@ -4,25 +4,29 @@ local box_utils = require 'densecap.box_utils'
 
 local DataLoader = torch.class('DataLoader')
 
+-- 构建 DataLoader！
 function DataLoader:__init(opt)
+  -- 搞清楚这两个文件到底是用啥做的？
   self.h5_file = utils.getopt(opt, 'data_h5') -- required h5file with images and other (made with prepro script)
   self.json_file = utils.getopt(opt, 'data_json') -- required json file with vocab etc. (made with prepro script)
-  self.debug_max_train_images = utils.getopt(opt, 'debug_max_train_images', -1)
-  self.proposal_regions_h5 = utils.getopt(opt, 'proposal_regions_h5', '')
+  self.debug_max_train_images = utils.getopt(opt, 'debug_max_train_images', -1)  -- 默认 -1
+  self.proposal_regions_h5 = utils.getopt(opt, 'proposal_regions_h5', '')  -- 默认为空
   
   -- load the json file which contains additional information about the dataset
+  -- 加载 json 文件
   print('DataLoader loading json file: ', self.json_file)
-  self.info = utils.read_json(self.json_file)
-  self.vocab_size = utils.count_keys(self.info.idx_to_token)
+  self.info = utils.read_json(self.json_file)  -- 读取json文件
+  self.vocab_size = utils.count_keys(self.info.idx_to_token)  -- 词袋的大小，count_keys算大小，索引转token？？
 
   -- Convert keys in idx_to_token from string to integer
+  -- 将 idx_to_token 中 key 从string 转换为 整形
   local idx_to_token = {}
   for k, v in pairs(self.info.idx_to_token) do
     idx_to_token[tonumber(k)] = v
   end
-  self.info.idx_to_token = idx_to_token
+  self.info.idx_to_token = idx_to_token  -- 替换掉 idx_to_token
 
-  -- open the hdf5 file
+  -- open the hdf5 file 打开hdf5 文件,读取hdf5文件，并存取到self中
   print('DataLoader loading h5 file: ', self.h5_file)
   self.h5_file = hdf5.open(self.h5_file, 'r')
   local keys = {}
@@ -42,6 +46,7 @@ function DataLoader:__init(opt)
     self[v] = self.h5_file:read('/' .. v):all()
   end
 
+  -- 读取 proposal 文件，这个默认没有
   -- open region proposals file for reading. This is useful if we, e.g.
   -- want to use the ground truth boxes, or if we want to use external region proposals
   if string.len(self.proposal_regions_h5) > 0 then
@@ -50,26 +55,29 @@ function DataLoader:__init(opt)
     self.obj_img_to_first_box = self.obj_boxes_file:read('/img_to_first_box'):all()
     self.obj_img_to_last_box = self.obj_boxes_file:read('/img_to_last_box'):all()
   end
-  
+
   -- extract image size from dataset
-  local images_size = self.h5_file:read('/images'):dataspaceSize()
-  assert(#images_size == 4, '/images should be a 4D tensor')
-  assert(images_size[3] == images_size[4], 'width and height must match')
+  local images_size = self.h5_file:read('/images'):dataspaceSize()  -- 从数据集中提取图像大小，此时图像已经转为 h5_file
+  assert(#images_size == 4, '/images should be a 4D tensor')  -- NCHW
+  assert(images_size[3] == images_size[4], 'width and height must match')  -- H == W
+  -- 图像的参数要对上
   self.num_images = images_size[1]
   self.num_channels = images_size[2]
   self.max_image_size = images_size[3]
 
   -- extract some attributes from the data
-  self.num_regions = self.boxes:size(1)
-  self.vgg_mean = torch.FloatTensor{103.939, 116.779, 123.68} -- BGR order
+  -- 从数据中提取相关属性
+  self.num_regions = self.boxes:size(1)  -- region 数量
+  self.vgg_mean = torch.FloatTensor{103.939, 116.779, 123.68} -- BGR order  -- vgg 均值
   self.vgg_mean = self.vgg_mean:view(1,3,1,1)
-  self.seq_length = self.labels:size(2)
+  self.seq_length = self.labels:size(2)  -- 序列长度
 
-  -- set up index ranges for the different splits
+  -- set up index ranges for the different splits 从不同分割中设置索引范围，到底啥意思？？？？？？？？？
   self.train_ix = {}
   self.val_ix = {}
   self.test_ix = {}
   for i=1,self.num_images do
+    -- self.split 是从哪里来的？？ 如果某个split等于 0,1,2 则分别在对应的train val test 中插入？？？
     if self.split[i] == 0 then table.insert(self.train_ix, i) end
     if self.split[i] == 1 then table.insert(self.val_ix, i) end
     if self.split[i] == 2 then table.insert(self.test_ix, i) end
@@ -141,6 +149,7 @@ end
   The data is iterated linearly in order. Iterators for any split can be reset manually with resetIterator()
   Returning random examples is also supported by passing in .iterate = false in opt.
 --]]
+-- 这个函数相当于 getitem() ?????
 function DataLoader:getBatch(opt)
   local split = utils.getopt(opt, 'split', 0)
   local iterate = utils.getopt(opt, 'iterate', true)

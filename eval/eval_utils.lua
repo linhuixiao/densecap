@@ -55,11 +55,16 @@ function eval_utils.eval_split(kwargs)
     model.timing = false
     model.dump_vars = false
     model.cnn_backward = false
+
+    -- 核心计算部分，输出loss
     local losses = model:forward_backward(data)
+
     table.insert(all_losses, losses)
 
     -- Call forward_test to make predictions, and pass them to evaluator
+    -- 仅执行前向计算
     local boxes, logprobs, captions = model:forward_test(data.image)
+
     local gt_captions = model.nets.language_model:decodeSequence(gt_labels[1])
     evaluator:addResult(logprobs, boxes, captions, gt_boxes[1], gt_captions)
     
@@ -133,7 +138,9 @@ local function pluck_boxes(ix, boxes, text)
 end
 
 
+-- 核心评估类函数
 local DenseCaptioningEvaluator = torch.class('DenseCaptioningEvaluator')
+
 function DenseCaptioningEvaluator:__init(opt)
   self.all_logprobs = {}
   self.records = {}
@@ -161,6 +168,7 @@ function DenseCaptioningEvaluator:addResult(logprobs, boxes, text, target_boxes,
   target_boxes = target_boxes:float()
 
   -- merge ground truth boxes that overlap by >= 0.7
+  -- 将重叠度大于0.7的 box 融合为一个 box
   local mergeix = box_utils.merge_boxes(target_boxes, 0.7) -- merge groups of boxes together
   local merged_boxes, merged_text = pluck_boxes(mergeix, target_boxes, target_text)
 
@@ -220,6 +228,7 @@ function DenseCaptioningEvaluator:addResult(logprobs, boxes, text, target_boxes,
   table.insert(self.all_logprobs, Y:double()) -- inserting the sorted logprobs as double
 end
 
+-- 核心计算部分！！！
 function DenseCaptioningEvaluator:evaluate(verbose)
   if verbose == nil then verbose = true end
   local min_overlaps = {0.3, 0.4, 0.5, 0.6, 0.7}

@@ -50,6 +50,7 @@ function DenseCapModel:__init(opt)
   self.net = nn.Sequential()
   
   -- Load the CNN from disk
+  -- CNN 部分
   local cnn = net_utils.load_cnn(opt.cnn_name, opt.backend, opt.path_offset)
   
   -- We need to chop the CNN into three parts: conv that is not finetuned,
@@ -398,11 +399,17 @@ Input: data is table with the following keys:
   TODO: What format are the boxes?
 - gt_labels: 1 x B x L array of ground-truth sequences for boxes
 --]]
+
+-- [” 核心前向计算！！！！!“]
+
 function DenseCapModel:forward_backward(data)
   self:training()
 
   -- Run the model forward
+  -- 需要提前设置 gt box 和 gt 标签
   self:setGroundTruth(data.gt_boxes, data.gt_labels)
+
+  -- 直接前向计算！前向计算在哪定义的？
   local out = self:forward(data.image)
 
   -- Pick out the outputs we care about
